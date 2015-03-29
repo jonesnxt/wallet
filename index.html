@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="X-UA-Compatible" content="IE=9" />
+<title>Jay Proof Of Concept Wallet</title>
+<script src="../jquery.js"></script>
+<script src="../bootstrap/js/bootstrap.min.js"></script>
+<link rel="stylesheet" href="../bootstrap/css/bootstrap.min.css">
+<script src="jay.min.js"></script>
+<script>
+var ADDRESS = "";
+//Jay.isTestnet = "true";
+Jay.setNode("jnxt.org");
+Jay.setRequestMethod = Jay.requestMethods.single;
+$("document").ready(function() {
+	$("#modal_login").modal("show");
+
+	$("#modal_login").on("hide.bs.modal", function() {
+		var token = $("#modal_login_box").val();
+		var data = Jay.parseToken(token, "wallet");
+		ADDRESS = data.accountRS;
+		$("#account_info_address").text(ADDRESS);
+		Jay.request("getAccount", {"account":ADDRESS}, function(data) {
+			var mstable = "";
+			account = JSON.parse(data);
+			$("#account_info_name").text(account.name);
+			$("#account_info_description").text(account.description);
+			$("#account_info_balance").text(account.balanceNQT/100000000 + " NXT");
+			for(var i=0;i<account.accountCurrencies.length;i++)
+			{
+				mstable += "<tr>";
+				mstable += "<td>" + account.accountCurrencies[i].name + "</td>";
+				mstable += "<td>" + account.accountCurrencies[i].currency + "</td>";
+				var amount = account.accountCurrencies[i].units/Math.pow(10, account.accountCurrencies[i].decimals);
+				mstable += "<td>" + amount + " " + account.accountCurrencies[i].code + "</td>";
+				mstable += "</tr>";
+			}
+			$("#ms_table tbody").html(mstable);
+			for(var a=0;a<account.assetBalances.length;a++)
+			{
+				Jay.request("getAsset", {"asset":account.assetBalances[a].asset, "balance":account.
+					assetBalances[a].balanceQNT}, function(data, status, xhr) {
+					var asset = JSON.parse(data);
+					var assetentry = "<tr>";
+					assetentry += "<td>"+asset.name+"</td>";
+					assetentry += "<td>"+asset.asset+"</td>";
+					var balance = xhr.parameters.balance/Math.pow(10, asset.decimals);
+					assetentry += "<td>"+balance + " " + asset.name + "</td>";
+					assetentry += "</tr>";
+					$("#asset_table tbody").append(assetentry);
+				})
+			}
+		})
+	});
+
+	$("#payment_form").submit(function(e) {
+		e.preventDefault();
+		if($("#payment_message").val().length > 0)
+			var message = Jay.addAppendage(Jay.appendages.message, $("#payment_message").val());
+		else var message = undefined;
+		var trf = Jay.sendMoney($("#payment_recipient").val(), $("#payment_amount").val(), message);
+		$("#payment_trf").val(trf);
+	});
+
+	$("#asset_form").submit(function(e) {
+		e.preventDefault();
+		Jay.request("getAsset", {"asset":$("#asset_id").val()}, function(data, status, xhr)
+		{
+			var asset = JSON.parse(data);
+			console.log(data);
+			if($("#asset_message").val().length > 0)
+				var message = Jay.addAppendage(Jay.appendages.message, $("#asset_message").val());
+			else var message = undefined;
+			var amount = Math.round($("#asset_amount").val()*Math.pow(10, asset.decimals));
+			var trf = Jay.transferAsset($("#asset_recipient").val(), $("#asset_id").val(), amount, message);
+			$("#asset_trf").val(trf);
+
+		})
+	});
+
+	$("#asset_id").on("input propertychange", function() {
+		// check for asset decimals
+		Jay.request("getAsset", {"asset":$("#asset_id").val()}, function(data, status, xhr)
+		{
+			var asset = JSON.parse(data);
+			if(asset.errorCode == undefined)
+			{
+				$("#asset_id_help").text("'"+asset.name+"' has " + asset.decimals + " decimals.");
+				if($("#asset_amount").val().length > 0) 
+					$("#asset_amount_help").text("Jay interprets as " + Math.round($("#asset_amount").val()*Math.pow(10, asset.decimals)) + " QNT");
+				else $("#asset_amount_help").text("");
+			}
+			else
+			{
+				$("#asset_id_help").text("");
+				$("#asset_amount_help").text("");
+			}
+		})
+	});
+
+	$("#asset_amount").on("input propertychange", function() {
+		// check for asset decimals
+		Jay.request("getAsset", {"asset":$("#asset_id").val()}, function(data, status, xhr)
+		{
+			var asset = JSON.parse(data);
+			if(asset.errorCode == undefined)
+			{
+				$("#asset_id_help").text("'"+asset.name+"' has " + asset.decimals + " decimals.");
+				if($("#asset_amount").val().length > 0) 
+					$("#asset_amount_help").text("Jay interprets as " + Math.round($("#asset_amount").val()*Math.pow(10, asset.decimals)) + " QNT");
+				else $("#asset_amount_help").text("");
+			}
+			else
+			{
+				$("#asset_id_help").text("");
+				$("#asset_amount_help").text("");
+			}
+		});
+	})
+
+	$("#ms_form").submit(function(e) {
+		e.preventDefault();
+		Jay.request("getCurrency", {"currency":$("#ms_id").val()}, function(data, status, xhr)
+		{
+			var ms = JSON.parse(data);
+			console.log(ms);
+			console.log(ms.decimals);
+			console.log($("#ms_amount").val())
+			if($("#ms_message").val().length > 0)
+				var message = Jay.addAppendage(Jay.appendages.message, $("#ms_message").val());
+			else var message = undefined;
+			var amount = Math.round($("#ms_amount").val()*Math.pow(10, ms.decimals));
+			console.log(amount);
+			var trf = Jay.transferCurrency($("#ms_recipient").val(), $("#ms_id").val(), amount, message);
+			$("#ms_trf").val(trf);
+
+		})
+	});
+
+	$("#ms_id").on("input propertychange", function() {
+		// check for asset decimals
+		Jay.request("getCurrency", {"currency":$("#ms_id").val()}, function(data, status, xhr)
+		{	
+			var ms = JSON.parse(data);
+			
+			if(ms.errorCode == undefined)
+			{
+				$("#ms_id_help").text("'"+ms.name+"' has " + ms.decimals + " decimals.");
+				if($("#ms_amount").val().length > 0) 
+					$("#ms_amount_help").text("Jay interprets as " + Math.round($("#ms_amount").val()*Math.pow(10, ms.decimals)) + " QNT");
+				else $("#ms_amount_help").text("");
+			}
+			else
+			{
+				$("#ms_id_help").text("");
+				$("#ms_amount_help").text("");
+			}
+		})
+	});
+
+	$("#ms_amount").on("input propertychange", function() {
+		Jay.request("getCurrency", {"currency":$("#ms_id").val()}, function(data, status, xhr)
+		{	
+
+			var ms = JSON.parse(data);
+			if(ms.errorCode == undefined)
+			{
+				$("#ms_id_help").text("'"+ms.name+"' has " + ms.decimals + " decimals.");
+				if($("#ms_amount").val().length > 0) 
+					$("#ms_amount_help").text("Jay interprets as " + Math.round($("#ms_amount").val()*Math.pow(10, ms.decimals)) + " QNT");
+				else $("#ms_amount_help").text("");
+			}
+			else
+			{
+				$("#ms_id_help").text("");
+				$("#ms_amount_help").text("");
+			}
+		})
+	})
+
+});
+
+</script>
+</head>
+
+<body>
+<div class="container">
+	<div class="row">
+		<div class="col-md-12">
+			<div class="page-header"><h1>Jay Proof Of Concept Wallet</h1></div>	
+		</div>
+	</div>
+	<div class="row">
+		<div class="col-md-6">
+			<div class="panel panel-primary">
+				<div class="panel-heading">
+					<div class="panel-title">
+						Account Info
+					</div>
+				</div>
+				<div class="panel-body">
+					<div class="page-header"><h3 id="account_info_address">No Address Found</h3></div>
+					<dl>
+						<dt>Name</dt>
+						<dd id="account_info_name"></dd>
+						<dt>Description</dt>
+						<dd id="account_info_description"></dd>
+						<dt>Balance</dt>
+						<dd id="account_info_balance"></dd>
+					</dl>
+					<table id="asset_table" class="table table-hover">
+						<thead>
+							<tr>
+								<th>Asset Name</th>
+								<th>Asset Id</th>
+								<th>Amount Owned</th>
+							</tr>
+						</thead>
+						<tbody>
+
+						</tbody>
+					</table>
+					<table id="ms_table" class="table table-hover">
+						<thead>
+							<tr>
+								<th>Currency Name</th>
+								<th>Currency Id</th>
+								<th>Amount Owned</th>
+							</tr>
+						</thead>
+						<tbody>
+						</tbody>
+					</table>
+				</div>
+			</div>
+		</div>
+		<div class="col-md-6">
+			<div class="panel panel-primary">
+				<div class="panel-heading">
+					<div class="panel-title">Transact
+					</div>
+				</div>
+				<div class="panel-body">
+					<div role="tabpanel">
+					  	<!-- Nav tabs -->
+						<ul class="nav nav-tabs" role="tablist">
+					    	<li role="presentation" class="active"><a href="#payment" aria-controls="payment" role="tab" data-toggle="tab">Payment</a></li>
+					    	<li role="presentation"><a href="#asset" aria-controls="asset" role="tab" data-toggle="tab">Asset Transfer</a></li>
+					    	<li role="presentation"><a href="#ms" aria-controls="ms" role="tab" data-toggle="tab">MS Transfer</a></li>
+					  	</ul>
+						<br/><br/>
+					  	<!-- Tab panes -->
+					  	<div class="tab-content">
+					    	<div role="tabpanel" class="tab-pane active" id="payment">
+					    		<form id="payment_form">
+									<div class="form-group">
+										<label for="payment_recipient" class="control-label">Recipient<br/></label>
+										<input type="text" id="payment_recipient" class="form-control"/>
+									</div>
+									<div class="form-group">
+										<label for="payment_amount" class="control-label">Amount</label>
+										<input type="text" class="form-control" id="payment_amount"/>
+									</div>
+									<div class="form-group">
+										<label for="payment_message" class="control-label">Message</label>
+										<textarea class="form-control" id="payment_message"></textarea>
+									</div><br/>
+									<div class="form-group container-fluid">
+										<div class="col-sm-9">
+											<input type="text" readonly class="form-control" id="payment_trf"/>
+											<span class="help-text">Paste TX_ into transact tab of Jay to send</span>
+										</div>
+										<button class="col-sm-3 btn btn-primary btn-large pull-right">Create</button>
+									</div>
+								</form>
+							</div>
+							<div role="tabpanel" class="tab-pane" id="asset">
+					    		<form id="asset_form">
+									<div class="form-group">
+										<label for="asset_recipient" class="control-label">Recipient<br/></label>
+										<input type="text" id="asset_recipient" class="form-control"/>
+									</div>
+									<div class="form-group">
+										<label for="asset_id" class="control-label">Asset Id<br/></label>
+										<input type="text" id="asset_id" class="form-control"/>
+										<span class="help-text" id="asset_id_help"></span>
+									</div>
+									<div class="form-group">
+										<label for="asset_amount" class="control-label">Amount</label>
+										<input type="text" class="form-control" id="asset_amount"/>
+										<span class="help-text" id="asset_amount_help"></span>
+									</div>
+									<div class="form-group">
+										<label for="asset_message" class="control-label">Message</label>
+										<textarea class="form-control" id="asset_message"></textarea>
+									</div><br/>
+									<div class="form-group container-fluid">
+										<div class="col-sm-9">
+											<input type="text" readonly class="form-control" id="asset_trf"/>
+											<span class="help-text">Paste TX_ into transact tab of Jay to send</span>
+										</div>
+										<button class="col-sm-3 btn btn-primary btn-large pull-right">Create</button>
+									</div>
+								</form>
+							</div>
+							<div role="tabpanel" class="tab-pane" id="ms">
+					    		<form id="ms_form">
+									<div class="form-group">
+										<label for="ms_recipient" class="control-label">Recipient<br/></label>
+										<input type="text" id="ms_recipient" class="form-control"/>
+									</div>
+									<div class="form-group">
+										<label for="ms_id" class="control-label">Currency Id<br/></label>
+										<input type="text" id="ms_id" class="form-control"/>
+										<span class="help-text" id="ms_id_help"></span>
+									</div>
+									<div class="form-group">
+										<label for="ms_amount" class="control-label">Amount</label>
+										<input type="text" class="form-control" id="ms_amount"/>
+										<span class="help-text" id="ms_amount_help"></span>
+									</div>
+									<div class="form-group">
+										<label for="ms_message" class="control-label">Message</label>
+										<textarea class="form-control" id="ms_message"></textarea>
+									</div><br/>
+									<div class="form-group container-fluid">
+										<div class="col-sm-9">
+											<input type="text" readonly class="form-control" id="ms_trf"/>
+											<span class="help-text">Paste TX_ into transact tab of Jay to send</span>
+										</div>
+										<button class="col-sm-3 btn btn-primary btn-large pull-right">Create</button>
+									</div>
+								</form>
+							</div>
+					    </div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+
+<!-- Modal -->
+<div class="modal fade" id="modal_login" tabindex="-1" role="dialog" aria-hidden="false">
+	<div class="modal-dialog">
+		<div class="modal-content">
+      		<div class="modal-header">
+       			<button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        		<h4 class="modal-title" id="modal_login_title">Enter Account</h4>
+      		</div>
+      		<div class="modal-body">
+      			<div hidden="hidden" class="alert alert-info"><strong id="modal_login_error"></strong></div>
+      			<div class="form-group" style="margin-bottom:0;padding-bottom:0;">
+      				<label for="modal_login_box" class="control-label">Token of "wallet"</label>
+					<textarea id="modal_login_box" rows="4" type="text" class="form-control input-sm"></textarea>
+					<span class="help-text">This application is based on the <a href="http://jnxt.org/jay">Jay Client</a></span>
+      			</div>
+      		</div>
+      		<div class="modal-footer">
+        		<button type="button" class="btn btn-primary" id="modal_login_close" data-dismiss="modal">Continue</button>
+			</div>
+		</div>
+  	</div>
+</div>
